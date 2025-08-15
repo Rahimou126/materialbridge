@@ -39,110 +39,100 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Sizer(builder: (context, orientation, screenType) {
       return MaterialApp(
-        navigatorObservers: [routeObserver],
+        navigatorObservers: [trackingRouteObserver1],
+
         title: 'materialbridge',
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.light,
         builder: (context, child) {
-          return CustomWidgetInspector(
-             child: TrackingWidget(
-            child: MediaQuery(
+        
+        final originalChild = MediaQuery(
             data: MediaQuery.of(context).copyWith(
               textScaler: TextScaler.linear(1.0),
-      ),
+            ),
             child: child!,
-          ) // Preserve original MediaQuery content
-          )
+          );
+        return CustomWidgetInspector(
+          child: TrackingWidget(
+            child: originalChild,
+          ),
         );
-        },
+      },
         debugShowCheckedModeBanner: false,
         routes: AppRoutes.routes,
         initialRoute: AppRoutes.initial,
-      );
+      
+);
     });
   }
 }
 final ValueNotifier<String> currentPageNotifier = ValueNotifier<String>('');
 
-class MyRouteObserver extends RouteObserver<PageRoute<dynamic>> {
-          void _updateCurrentPage(Route<dynamic>? route) {
-            if (route is PageRoute) {
-              currentPageNotifier.value = route.settings.name ?? '';
-            }
-          }
+class MyRouteObserver1 extends RouteObserver<PageRoute<dynamic>> {
+  void _updateCurrentPage(Route<dynamic>? route) {
+    if (route is PageRoute) {
+      currentPageNotifier.value = route.settings.name ?? '';
+    }
+  }
 
-          @override
-          void didPush(Route route, Route? previousRoute) {
-            super.didPush(route, previousRoute);
-            _updateCurrentPage(route);
-          }
+  @override
+  void didPush(Route route, Route? previousRoute) {
+    super.didPush(route, previousRoute);
+    _updateCurrentPage(route);
+  }
 
-          @override
-          void didPop(Route route, Route? previousRoute) {
-            super.didPop(route, previousRoute);
-            _updateCurrentPage(previousRoute);
-          }
+  @override
+  void didPop(Route route, Route? previousRoute) {
+    super.didPop(route, previousRoute);
+    _updateCurrentPage(previousRoute);
+  }
 
-          @override
-          void didReplace({Route? newRoute, Route? oldRoute}) {
-            super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
-            _updateCurrentPage(newRoute);
-          }
-        }
-        final MyRouteObserver routeObserver = MyRouteObserver();
+  @override
+  void didReplace({Route? newRoute, Route? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    _updateCurrentPage(newRoute);
+  }
+}
+final MyRouteObserver1 trackingRouteObserver1 = MyRouteObserver1();
 
 
-
-    void _sendOverflowError(FlutterErrorDetails details) {
-      try {
-       bool hasValidHost= html.window.location.host.isNotEmpty &&
+void _sendOverflowError(FlutterErrorDetails details) {
+  try {
+    bool hasValidHost= html.window.location.host.isNotEmpty &&
         (html.window.location.host.contains('.netlify.app') ||
             html.window.location.host.contains('.public.builtwithrocket.new'));
         if (hasValidHost) {
           return;
-        }
-        final errorMessage = details.exception.toString();
-        final exceptionType = details.exception.runtimeType.toString();
-
-        String location = 'Unknown';
-        final locationMatch = RegExp(r'file:///.*\.dart').firstMatch(details.toString());
-        if (locationMatch != null) {
-          location = locationMatch.group(0)?.replaceAll("file://", '') ?? 'Unknown';
-        }
-        String errorType = "RUNTIME_ERROR";
-        if(errorMessage.contains('overflowed by') || errorMessage.contains('RenderFlex overflowed')) {
-          errorType = 'OVERFLOW_ERROR';
-        }
-        final payload = {
-          'errorType': errorType,
-          'exceptionType': exceptionType,
-          'message': errorMessage,
-          'location': location,
-          'timestamp': DateTime.now().toIso8601String(),
-        };
-        final jsonData = jsonEncode(payload);
-        final request = html.HttpRequest();
-        request.open('POST', backendURL, async: true);
-        request.setRequestHeader('Content-Type', 'application/json');
-        request.onReadyStateChange.listen((_) {
-          if (request.readyState == html.HttpRequest.DONE) {
-            if (request.status == 200) {
-              print('Successfully reported error');
-            } else {
-              print('Error reporting overflow');
-            }
-          }
-        });
-        request.onError.listen((event) {
-          print('Failed to send overflow report');
-        });
-        request.send(jsonData);
-      } catch (e) {
-        print('Exception while reporting overflow error: $e');
-      }
+        }final errorMessage = details.exception.toString();
+    final exceptionType = details.exception.runtimeType.toString();
+    String location = 'Unknown';
+    final locationMatch = RegExp(r'file:///.*\.dart').firstMatch(details.toString());
+    if (locationMatch != null) {
+      location = locationMatch.group(0)?.replaceAll("file://", '') ?? 'Unknown';
     }
-    class TrackingWidget extends StatefulWidget {
+    String errorType = "RUNTIME_ERROR";
+    if(errorMessage.contains('overflowed by') || errorMessage.contains('RenderFlex overflowed')) {
+      errorType = 'OVERFLOW_ERROR';
+    }
+    final payload = {
+      'errorType': errorType,
+      'exceptionType': exceptionType,
+      'message': errorMessage,
+      'location': location,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+    final jsonData = jsonEncode(payload);
+    final request = html.HttpRequest();
+    request.open('POST', backendURL, async: true);
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.send(jsonData);
+  } catch (e) {
+    // print('Exception while reporting overflow error: $e');
+  }
+}
+
+class TrackingWidget extends StatefulWidget {
   final Widget child;
 
   const TrackingWidget({super.key, required this.child});
@@ -162,8 +152,10 @@ class _TrackingWidgetState extends State<TrackingWidget> {
   @override
   void initState() {
     super.initState();
-    currentPage = currentPageNotifier.value;
-    currentPageNotifier.addListener(_updateCurrentPage);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      currentPage = currentPageNotifier.value;
+      currentPageNotifier.addListener(_updateCurrentPage);
+    });
   }
 
   void _updateCurrentPage() {
@@ -178,68 +170,10 @@ class _TrackingWidgetState extends State<TrackingWidget> {
     String? foundWidget;
 
     // Helper function to identify widget type
-    String? identifyWidget(Widget widget) {
-      if (widget is Text) return 'Text';
-      if (widget is Icon) return 'Icon';
-      if (widget is ElevatedButton) return 'ElevatedButton';
-      if (widget is TextButton) return 'TextButton';
-      if (widget is OutlinedButton) return 'OutlinedButton';
-      if (widget is FloatingActionButton) return 'FloatingActionButton';
-      if (widget is Checkbox) return 'Checkbox';
-      if (widget is Radio) return 'Radio';
-      if (widget is SwitchListTile) return 'SwitchListTile';
-      if (widget is RadioListTile) return 'RadioListTile';
-      if (widget is Switch) return 'Switch';
-      if (widget is ToggleButtons) return 'ToggleButtons';
-      if (widget is Slider) return 'Slider';
-      if (widget is RangeSlider) return 'RangeSlider';
-      if (widget is Image) return 'Image';
-      if (widget is Placeholder) return 'Placeholder';
-      if (widget is FileImage) return 'FileImage';
-      if (widget is NetworkImage) return 'NetworkImage';
-      if (widget is AssetImage) return 'AssetImage';
-      if (widget is ListTile) return 'ListTile';
-      if (widget is AppBar) return 'AppBar';
-      if (widget is BottomNavigationBar) return 'BottomNavigationBar';
-      if (widget is Drawer) return 'Drawer';
-      if (widget is Card) return 'Card';
-      if (widget is Chip) return 'Chip';
-      if (widget is ActionChip) return 'ActionChip';
-      if (widget is InputChip) return 'InputChip';
-      if (widget is ChoiceChip) return 'ChoiceChip';
-      if (widget is SnackBar) return 'SnackBar';
-      if (widget is Banner) return 'Banner';
-      if (widget is ProgressIndicator) return 'ProgressIndicator';
-      if (widget is CircularProgressIndicator)
-        return 'CircularProgressIndicator';
-      if (widget is LinearProgressIndicator) return 'LinearProgressIndicator';
-      if (widget is DropdownButton) return 'DropdownButton';
-      if (widget is PopupMenuButton) return 'PopupMenuButton';
-      if (widget is TextField) return 'TextField';
-      if (widget is TextFormField) return 'TextFormField';
-      if (widget is IconButton) return 'IconButton';
-      if (widget is Form) return 'Form';
-      if (widget is Container) return 'Container';
-      if (widget is Row) return 'Row';
-      if (widget is Column) return 'Column';
-      if (widget is Stack) return 'Stack';
-      if (widget is Wrap) return 'Wrap';
-      if (widget is ListView) return 'ListView';
-      if (widget is GridView) return 'GridView';
-      if (widget is SingleChildScrollView) return 'SingleChildScrollView';
-      if (widget is SizedBox) return 'SizedBox';
-      if (widget is Padding) return 'Padding';
-      if (widget is Tooltip) return 'Tooltip';
-      if (widget is SliverAppBar) return 'SliverAppBar';
-      if (widget is SliverList) return 'SliverList';
-      if (widget is SliverGrid) return 'SliverGrid';
-      if (widget is SliverToBoxAdapter) return 'SliverToBoxAdapter';
-      if (widget is SliverFillRemaining) return 'SliverFillRemaining';
-      if (widget is SliverPadding) return 'SliverPadding';
-      if (widget is SliverFixedExtentList) return 'SliverFixedExtentList';
-      if (widget is SliverFillViewport) return 'SliverFillViewport';
-      if (widget is SliverPersistentHeader) return 'SliverPersistentHeader';
-      return null;
+     String? identifyWidget(Widget widget) {
+      return _widgetTypeMap[widget.runtimeType] ??
+          _getCustomWidgetType(widget) ??
+          null;
     }
 
     // Check current element
@@ -266,6 +200,95 @@ class _TrackingWidgetState extends State<TrackingWidget> {
     element.visitChildren(visitDescendants);
 
     return foundWidget ?? 'unknown';
+  }
+
+    // Static Map for widget type lookup
+  static const Map<Type, String> _widgetTypeMap = {
+    // Basic widgets
+    Text: 'Text',
+    Icon: 'Icon',
+
+    // Buttons
+    ElevatedButton: 'ElevatedButton',
+    TextButton: 'TextButton',
+    OutlinedButton: 'OutlinedButton',
+    FloatingActionButton: 'FloatingActionButton',
+    IconButton: 'IconButton',
+
+    // Form controls
+    Checkbox: 'Checkbox',
+    Radio: 'Radio',
+    Switch: 'Switch',
+    SwitchListTile: 'SwitchListTile',
+    RadioListTile: 'RadioListTile',
+    ToggleButtons: 'ToggleButtons',
+    Slider: 'Slider',
+    RangeSlider: 'RangeSlider',
+    TextField: 'TextField',
+    TextFormField: 'TextFormField',
+    DropdownButton: 'DropdownButton',
+    PopupMenuButton: 'PopupMenuButton',
+    Form: 'Form',
+
+    // Media widgets
+    Image: 'Image',
+    Placeholder: 'Placeholder',
+    FileImage: 'FileImage',
+    NetworkImage: 'NetworkImage',
+    AssetImage: 'AssetImage',
+
+    // Layout widgets
+    Container: 'Container',
+    Row: 'Row',
+    Column: 'Column',
+    Stack: 'Stack',
+    Wrap: 'Wrap',
+    SizedBox: 'SizedBox',
+    Padding: 'Padding',
+
+    // Lists and grids
+    ListView: 'ListView',
+    GridView: 'GridView',
+    ListTile: 'ListTile',
+    SingleChildScrollView: 'SingleChildScrollView',
+
+    // Navigation
+    AppBar: 'AppBar',
+    BottomNavigationBar: 'BottomNavigationBar',
+    Drawer: 'Drawer',
+    SliverAppBar: 'SliverAppBar',
+
+    // Material components
+    Card: 'Card',
+    Chip: 'Chip',
+    ActionChip: 'ActionChip',
+    InputChip: 'InputChip',
+    ChoiceChip: 'ChoiceChip',
+    SnackBar: 'SnackBar',
+    Banner: 'Banner',
+    Tooltip: 'Tooltip',
+
+    // Progress indicators
+    ProgressIndicator: 'ProgressIndicator',
+    CircularProgressIndicator: 'CircularProgressIndicator',
+    LinearProgressIndicator: 'LinearProgressIndicator',
+
+    // Sliver widgets
+    SliverList: 'SliverList',
+    SliverGrid: 'SliverGrid',
+    SliverToBoxAdapter: 'SliverToBoxAdapter',
+    SliverFillRemaining: 'SliverFillRemaining',
+    SliverPadding: 'SliverPadding',
+    SliverFixedExtentList: 'SliverFixedExtentList',
+    SliverFillViewport: 'SliverFillViewport',
+    SliverPersistentHeader: 'SliverPersistentHeader',
+  };
+
+  // Handle custom widget types that might not be in the map
+  String? _getCustomWidgetType(Widget widget) {
+    // Add any custom widget type checks here
+    // This is a fallback for widgets not in the static map
+    return null;
   }
 
   void trackInteraction(String eventType, PointerEvent? event) {
@@ -349,7 +372,7 @@ class _TrackingWidgetState extends State<TrackingWidget> {
 
       // print('Interaction Data: $interactionData');
     } catch (error) {
-      print('Error tracking interaction flutter: $error');
+      // print('Error tracking interaction flutter: $error');
     }
   }
 
